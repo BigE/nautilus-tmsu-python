@@ -2,7 +2,7 @@ from gi.repository import Nautilus, GObject, Gio, Gtk
 from typing import List, Literal
 
 from nautilus_tmsu_dialog import NautilusTMSUAddDialog, NautilusTMSUEditDialog
-from nautilus_tmsu_utils import get_tmsu_tags, find_nautilus_window, is_tmsu_db, which_tmsu
+from nautilus_tmsu_utils import is_tmsu_db, which_tmsu
 
 MENU_ITEM_NAME = "NautilusTMSUMenu"
 
@@ -57,19 +57,12 @@ class NautilusTMSUMenu(GObject.Object, Nautilus.MenuProvider):
 		]
 
 	def on_menu_item_activated(self, menu_item: Nautilus.MenuItem, action: Literal["add", "edit"], files: List[Nautilus.FileInfo]):
-		window = find_nautilus_window()
-		if window is None:
-			raise ValueError("Failed to find Nautilus main window")
-		application = window.get_application()
-		if not isinstance(application, Gtk.Application):
-			raise TypeError(f"Expecting type Gtk.Application: {application.__class__}")
-
 		if action == "add":
-			dialog = NautilusTMSUAddDialog(window, application, files)
+			dialog = NautilusTMSUAddDialog(files)
 		elif action == "edit":
 			if len(files) != 1:
 				raise TypeError(f"Edit can only work with 1 file, got {len(files)} files")
-			dialog = NautilusTMSUEditDialog(window, application, files[0])
+			dialog = NautilusTMSUEditDialog(files[0])
 		else:
 			raise ValueError(f"Unknown action: {action}")
 

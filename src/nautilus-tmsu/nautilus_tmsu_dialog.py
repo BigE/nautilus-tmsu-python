@@ -17,30 +17,35 @@ from nautilus_tmsu_utils import add_tmsu_tags, delete_tmsu_tag, get_tmsu_tags
 class NautilusTMSUDialog(Gtk.ApplicationWindow):
 	_files: List[Nautilus.FileInfo]
 
-	def __init__(self, title, parent_window: Gtk.Window, application: Gtk.Application | None, files: List[Nautilus.FileInfo]):
-		super().__init__(application=application, title=title)
+	def __init__(self, title, files: List[Nautilus.FileInfo]):
+		application = Gtk.Application.get_default()
+		if not isinstance(application, Gtk.Application) or application.get_application_id() != "org.gnome.Nautilus":
+			raise TypeError("Unable to find Gtk.Application with application_id of \"org.gnome.Nautilus\"")
+		window = application.get_active_window()
+		super().__init__(application=application, modal=True, title=title, transient_for=window)
 		self._files = files
-
-		self.set_modal(True)
-		self.set_transient_for(parent_window)
-
-	def is_single_directory(self) -> bool:
-		if len(self._files) == 1 and self._files[0].is_directory():
-			return True
-		return False
-
-
-class NautilusTMSUAddDialog(NautilusTMSUDialog):
-	def __init__(self, parent_window: Gtk.Window, application: Gtk.Application | None, files: List[Nautilus.FileInfo]):
-		super().__init__("TMSU Add Tags", parent_window, application, files)
-
-		self.set_default_size(400, 150)
-
 		vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
 		vbox.set_margin_bottom(20)
 		vbox.set_margin_end(20)
 		vbox.set_margin_start(20)
 		vbox.set_margin_top(20)
+		self.set_child(vbox)
+
+	def is_single_directory(self):
+		return self.is_single_item() and self._files[0].is_directory()
+
+	def is_single_item(self):
+		return len(self._files) == 1
+
+
+class NautilusTMSUAddDialog(NautilusTMSUDialog):
+	def __init__(self, files: List[Nautilus.FileInfo]):
+		super().__init__("TMSU Add Tags", files)
+
+		self.set_default_size(400, 150)
+
+		vbox = self.get_child()
+		assert isinstance(vbox, Gtk.Box)
 		vbox.append(Gtk.Label(label=f"Add (space-separated) tags to {len(files)} file{"" if len(files) == 1 else "s"}"))
 		entry = Gtk.Entry(activates_default=True)
 		vbox.append(entry)
@@ -99,16 +104,13 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		self.destroy()
 
 class NautilusTMSUEditDialog(NautilusTMSUDialog):
-	def __init__(self, parent_window: Gtk.Window, application: Gtk.Application | None, file: Nautilus.FileInfo):
-		super().__init__("TMSU Edit Tags", parent_window, application, [file, ])
+	def __init__(self, file: Nautilus.FileInfo):
+		super().__init__("TMSU Edit Tags", [file, ])
 
 		self.set_default_size(400, 500)
 
-		vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-		vbox.set_margin_bottom(20)
-		vbox.set_margin_end(20)
-		vbox.set_margin_start(20)
-		vbox.set_margin_top(20)
+		vbox = self.get_child()
+		assert isinstance(vbox, Gtk.Box)
 		tag_listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
 		vbox.append(tag_listbox)
 		tag_listbox.add_css_class("boxed-list")

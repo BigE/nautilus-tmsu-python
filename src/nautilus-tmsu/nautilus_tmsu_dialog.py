@@ -11,7 +11,7 @@ except ValueError as e:
 
 from typing import List
 
-from nautilus_tmsu_utils import add_tmsu_tags, delete_tmsu_tag, get_tmsu_tags
+from nautilus_tmsu_utils import add_tmsu_tags, delete_tmsu_tag, get_path_from_file_info, get_tmsu_tags
 
 
 class NautilusTMSUDialog(Gtk.ApplicationWindow):
@@ -52,17 +52,8 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		completion = Gtk.EntryCompletion()
 		entry.set_completion(completion)
 		completion_model = Gtk.ListStore(str)
-		cwd = None
+		cwd = get_path_from_file_info(files[0], not files[0].is_directory())
 		switch = None
-		location = files[0].get_location()
-		if not isinstance(location, Gio.File):
-			raise ValueError
-		if files[0].is_directory() and isinstance(location, Gio.File):
-			cwd = str(location.get_path())
-		else:
-			parent = location.get_parent()
-			if isinstance(parent, Gio.File):
-				cwd = str(parent.get_path())
 		for item in get_tmsu_tags(cwd=cwd):
 			completion_model.append([item, ])
 		completion.set_model(completion_model)
@@ -127,10 +118,7 @@ class NautilusTMSUEditDialog(NautilusTMSUDialog):
 		self.set_child(vbox)
 
 	def delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Gtk.ListBoxRow, tag_listbox: Gtk.ListBox):
-		file = file_info.get_location()
-		if not isinstance(file, Gio.File):
-			return
-		path = file.get_path()
+		path = get_path_from_file_info(file_info)
 		if path:
 			try:
 				delete_tmsu_tag(str(path), tag)

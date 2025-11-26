@@ -64,7 +64,26 @@ def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None
 	return [item.replace('\\ ', ' ') for item in output.strip("\n").split("\n")[1:]]
 
 
-def is_tmsu_db(path, tmsu="tmsu"):
+def get_path_from_file_info(file_info: Nautilus.FileInfo, parent=False):
+	file = file_info.get_location()
+	if not isinstance(file, Gio.File):
+		return None
+	if parent:
+		parent_obj = file.get_parent()
+		if not isinstance(parent_obj, Gio.File):
+			return None
+		return parent_obj.get_path()
+	return file.get_path()
+
+
+
+def init_tmsu_db(path, tmsu="tmsu"):
+	if is_tmsu_db(path):
+		raise ValueError(f"Path {path} already has a TMSU database")
+	run_tmsu_command("init", cwd=path, notification=True, tmsu=tmsu)
+
+
+def is_tmsu_db(path: str, tmsu="tmsu"):
 	return False if run_tmsu_command("info", cwd=path, tmsu=tmsu) is None else True
 
 

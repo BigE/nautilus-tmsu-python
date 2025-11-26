@@ -1,5 +1,4 @@
 nautilus_path=`which nautilus`
-VERSION=0.0.1
 
 ifeq ($(strip $(DESTDIR)),)
 	INSTALL_DIR = $(HOME)/.local/share/nautilus-python/extensions

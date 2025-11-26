@@ -2,7 +2,9 @@ import gi
 import os
 import subprocess
 import sys
+import threading
 
+from gi.repository import GLib
 from typing import List
 
 try:
@@ -14,30 +16,27 @@ except ValueError as e:
 
 
 def add_tmsu_tags(files: List[str], tags: List[str], recursive: bool=False, tmsu="tmsu"):
-	tmsu = which_tmsu(tmsu)
 	cwd = os.path.dirname(files[0]) if not os.path.isdir(files[0]) else files[0]
-	args = [tmsu, "tag"]
+	args = ["tag"]
 	if recursive:
 		args.append("-r")
 	args += [f"--tags=\"{" ".join(tags)}\"", " ".join(files)]
-	result = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
-
-	if result.returncode != 0:
-		raise ValueError(result.stderr)
+	thread = threading.Thread(
+		target=run_tmsu_command,
+		args=args,
+		kwargs={"cwd": cwd, "notification": True, "tmsu": tmsu},
+		daemon=True
+	)
+	thread.start()
 
 
 def delete_tmsu_tag(file: str, tag: str, tmsu="tmsu"):
-	tmsu = which_tmsu(tmsu)
 	cwd = os.path.dirname(file if os.path.isdir(file) else os.path.dirname(file))
-	result = subprocess.run([tmsu, "untag", file, tag], capture_output=True, text=True, cwd=cwd)
-
-	if result.returncode != 0:
-		raise ValueError(result.stderr)
+	run_tmsu_command("untag", file, tag, cwd=cwd, notification=True, tmsu=tmsu)
 
 
 def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None, tmsu="tmsu"):
-	tmsu = which_tmsu(tmsu)
-	args = [tmsu, "tags", "-1"]
+	args = ["tags", "-1"]
 
 	if file_info:
 		file = file_info.get_location()
@@ -46,7 +45,6 @@ def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None
 		path = file.get_path()
 		if path is None:
 			raise ValueError(f"Cannot find file {file.get_uri()}")
-		print(f"Getting tags for {path}")
 		if cwd is None:
 			if file_info.is_directory():
 				cwd = str(file.get_path())
@@ -57,19 +55,48 @@ def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None
 		args.append(str(path))
 	elif cwd is None:
 		raise ValueError("You must specify file_info or cwd")
-	result = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
 
+	output = run_tmsu_command(*args, cwd=cwd, tmsu=tmsu)
 
-	if result.returncode != 0:
-		print(result.stderr)
+	if output is None:
 		return []
 
-	return [item.replace('\\ ', ' ') for item in result.stdout.strip("\n").split("\n")[1:]]
+	return [item.replace('\\ ', ' ') for item in output.strip("\n").split("\n")[1:]]
 
 
 def is_tmsu_db(path, tmsu="tmsu"):
+	return False if run_tmsu_command("info", cwd=path, tmsu=tmsu) is None else True
+
+
+def run_tmsu_command(*args, cwd=None, notification=False, tmsu="tmsu"):
 	tmsu = which_tmsu(tmsu)
-	return False if subprocess.run([tmsu, "info"], capture_output=True, cwd=path).returncode == 1 else True
+	args = (tmsu, ) + args
+
+	print(args)
+	try:
+		result = subprocess.run(args, capture_output=True, cwd=cwd)
+	except Exception as e:
+		if notification:
+			GLib.idle_add(send_notification, "TMSU Task Failed", str(e))
+		return None
+
+	if result.returncode != 0:
+		if notification:
+			GLib.idle_add(send_notification, "TMSU Task Failed", str(result.stderr))
+		return None
+
+	if notification:
+		GLib.idle_add(send_notification, "TMSU Task Complete", " ".join(args))
+	return result.stdout.decode('UTF-8')
+
+
+def send_notification(title: str, body: str):
+	notification = Gio.Notification()
+	notification.set_title(title)
+	notification.set_body(body)
+	application = Gio.Application.get_default()
+	if application:
+		application.send_notification(None, notification)
 
 
 def which_tmsu(tmsu="tmsu"):

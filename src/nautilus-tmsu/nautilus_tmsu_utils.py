@@ -72,7 +72,6 @@ def run_tmsu_command(*args, cwd=None, notification=False, tmsu="tmsu"):
 	tmsu = which_tmsu(tmsu)
 	args = (tmsu, ) + args
 
-	print(args)
 	try:
 		result = subprocess.run(args, capture_output=True, cwd=cwd)
 	except Exception as e:

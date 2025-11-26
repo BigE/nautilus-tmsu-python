@@ -24,6 +24,11 @@ class NautilusTMSUDialog(Gtk.ApplicationWindow):
 		self.set_modal(True)
 		self.set_transient_for(parent_window)
 
+	def is_single_directory(self) -> bool:
+		if len(self._files) == 1 and self._files[0].is_directory():
+			return True
+		return False
+
 
 class NautilusTMSUAddDialog(NautilusTMSUDialog):
 	def __init__(self, parent_window: Gtk.Window, application: Gtk.Application | None, files: List[Nautilus.FileInfo]):
@@ -31,7 +36,11 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 
 		self.set_default_size(400, 150)
 
-		vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+		vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+		vbox.set_margin_bottom(20)
+		vbox.set_margin_end(20)
+		vbox.set_margin_start(20)
+		vbox.set_margin_top(20)
 		vbox.append(Gtk.Label(label=f"Add (space-separated) tags to {len(files)} file{"" if len(files) == 1 else "s"}"))
 		entry = Gtk.Entry(activates_default=True)
 		vbox.append(entry)
@@ -39,6 +48,7 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		entry.set_completion(completion)
 		completion_model = Gtk.ListStore(str)
 		cwd = None
+		switch = None
 		location = files[0].get_location()
 		if not isinstance(location, Gio.File):
 			raise ValueError
@@ -53,12 +63,19 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		completion.set_model(completion_model)
 		completion.set_text_column(0)
 
+		if self.is_single_directory():
+			switch_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, hexpand=True)
+			vbox.append(switch_box)
+			switch_box.append(Gtk.Label(label="Apply tags recursively", hexpand=True))
+			switch = Gtk.Switch()
+			switch_box.append(switch)
+
 		button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.CENTER, hexpand=True)
 		vbox.append(button_box)
 
 		save_button = Gtk.Button(label="Save")
 		button_box.append(save_button)
-		save_button.connect("clicked", self._on_clicked_add_tags, entry)
+		save_button.connect("clicked", self._on_clicked_add_tags, entry, switch)
 
 		cancel_button = Gtk.Button(label="Canecl")
 		button_box.append(cancel_button)
@@ -67,7 +84,7 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		self.set_child(vbox)
 		self.set_default_widget(save_button)
 
-	def _on_clicked_add_tags(self, button: Gtk.Button, entry: Gtk.Entry):
+	def _on_clicked_add_tags(self, button: Gtk.Button, entry: Gtk.Entry, switch: Gtk.Switch | None):
 		text = str(entry.get_text())
 		tags = re.findall(r"((?:\\ |[^ ])+)", text)
 		files = []
@@ -78,7 +95,7 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 			path = location.get_path()
 			if path:
 				files.append(path)
-		add_tmsu_tags(files, tags)
+		add_tmsu_tags(files, tags, recursive=switch.get_active() if switch else False)
 		self.destroy()
 
 class NautilusTMSUEditDialog(NautilusTMSUDialog):

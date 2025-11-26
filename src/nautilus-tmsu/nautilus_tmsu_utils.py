@@ -13,10 +13,14 @@ except ValueError as e:
 	sys.exit(1)
 
 
-def add_tmsu_tags(files: List[str], tags: List[str], tmsu="tmsu"):
+def add_tmsu_tags(files: List[str], tags: List[str], recursive: bool=False, tmsu="tmsu"):
 	tmsu = which_tmsu(tmsu)
 	cwd = os.path.dirname(files[0]) if not os.path.isdir(files[0]) else files[0]
-	result = subprocess.run([tmsu, "tag", f"--tags=\"{" ".join(tags)}\"", " ".join(files)], capture_output=True, text=True, cwd=cwd)
+	args = [tmsu, "tag"]
+	if recursive:
+		args.append("-r")
+	args += [f"--tags=\"{" ".join(tags)}\"", " ".join(files)]
+	result = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
 
 	if result.returncode != 0:
 		raise ValueError(result.stderr)

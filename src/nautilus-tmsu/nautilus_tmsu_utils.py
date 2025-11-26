@@ -3,12 +3,32 @@ import os
 import subprocess
 import sys
 
+from typing import List
+
 try:
 	gi.require_version('Gtk', '4.0')
-	from gi.repository import Gtk, Nautilus
+	from gi.repository import Gio, Gtk, Nautilus
 except ValueError as e:
 	print(f"Error loading GTK 4.0: {e}")
 	sys.exit(1)
+
+
+def add_tmsu_tags(files: List[str], tags: List[str], tmsu="tmsu"):
+	tmsu = which_tmsu(tmsu)
+	cwd = os.path.dirname(files[0]) if not os.path.isdir(files[0]) else files[0]
+	result = subprocess.run([tmsu, "tag", f"--tags=\"{" ".join(tags)}\"", " ".join(files)], capture_output=True, text=True, cwd=cwd)
+
+	if result.returncode != 0:
+		raise ValueError(result.stderr)
+
+
+def delete_tmsu_tag(file: str, tag: str, tmsu="tmsu"):
+	tmsu = which_tmsu(tmsu)
+	cwd = os.path.dirname(file if os.path.isdir(file) else os.path.dirname(file))
+	result = subprocess.run([tmsu, "untag", file, tag], capture_output=True, text=True, cwd=cwd)
+
+	if result.returncode != 0:
+		raise ValueError(result.stderr)
 
 
 def find_nautilus_window() -> Gtk.Window | None:
@@ -22,19 +42,18 @@ def find_nautilus_window() -> Gtk.Window | None:
 	# 1. Get a list of all Gtk.Window objects currently managed by the process.
 	toplevels = Gtk.Window.list_toplevels()
 
-	if not toplevels:
+	if not isinstance(toplevels, list):
 		print("Error: No Gtk.Window objects found in the process.")
 		return None
 
 	# 2. Iterate and return the first one found that is active/visible.
 	# In a typical Nautilus extension process, one of these will be the main Nautilus window.
-	window: Gtk.Window
 	for window in toplevels:
 		# We can apply heuristics, but often simply taking the first one works,
 		# or checking if it's currently focused.
-		if window.is_visible():
+		if isinstance(window, Gtk.Window) and window.is_visible():
 			application = window.get_application()
-			if application and application.get_application_id() == 'org.gnome.Nautilus':
+			if isinstance(application, Gtk.Application) and application.get_application_id() == 'org.gnome.Nautilus':
 				# We don't want to assume the first visible top-level window
 				# is the Nautilus instance. Instead we check the application_id
 				# to ensure we're returning Nautilus
@@ -44,11 +63,30 @@ def find_nautilus_window() -> Gtk.Window | None:
 	return None
 
 
-def get_tmsu_tags(file_info: Nautilus.FileInfo, tmsu="tmsu"):
-	file = file_info.get_location()
+def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None, tmsu="tmsu"):
 	tmsu = which_tmsu(tmsu)
-	print(f"Getting tags for {file.get_path()}")
-	result = subprocess.run([tmsu, "tags", file.get_path(), "-1"], capture_output=True, text=True, cwd=file.get_path() if file_info.is_directory() else file.get_parent().get_path())
+	args = [tmsu, "tags", "-1"]
+
+	if file_info:
+		file = file_info.get_location()
+		if not isinstance(file, Gio.File):
+			raise ValueError()
+		path = file.get_path()
+		if path is None:
+			raise ValueError(f"Cannot find file {file.get_uri()}")
+		print(f"Getting tags for {path}")
+		if cwd is None:
+			if file_info.is_directory():
+				cwd = str(file.get_path())
+			else:
+				parent = file.get_parent()
+				if isinstance(parent, Gio.File):
+					cwd = str(parent.get_path())
+		args.append(str(path))
+	elif cwd is None:
+		raise ValueError("You must specify file_info or cwd")
+	result = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
+
 
 	if result.returncode != 0:
 		print(result.stderr)

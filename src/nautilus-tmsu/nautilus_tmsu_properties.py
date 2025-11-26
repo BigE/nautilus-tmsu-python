@@ -1,12 +1,10 @@
-import subprocess
-
 from gi.repository import Nautilus, GObject, Gio
 from typing import List
 
-from nautilus_tmsu_utils import which_tmsu
+from nautilus_tmsu_utils import get_tmsu_tags, which_tmsu
 
 
-class NautilusTMSUProperties(GObject.GObject, Nautilus.PropertiesModelProvider):
+class NautilusTMSUProperties(GObject.Object, Nautilus.PropertiesModelProvider):
 	def get_models(
 		self,
 		files: List[Nautilus.FileInfo],
@@ -14,23 +12,13 @@ class NautilusTMSUProperties(GObject.GObject, Nautilus.PropertiesModelProvider):
 		if len(files) != 1:
 			return []
 
-		tmsu = which_tmsu()
-		file: Gio.File = files[0].get_location()
+		tags_model = Gio.ListStore(item_type=Nautilus.PropertiesItem)
 
-		if file is None:
-			return []
-
-		tags_model = Gio.ListStore.new(item_type=Nautilus.PropertiesItem)
-		result = subprocess.run([tmsu, "tags", "-1", file.get_path()], capture_output=True, text=True, cwd=file.get_parent().get_path())
-
-		if result.returncode != 0:
-			return []
-
-		for tag in result.stdout.strip("\n").split("\n")[1:]:
+		for tag in get_tmsu_tags(files[0]):
 			tags_model.append(
 				Nautilus.PropertiesItem(
 					name="Tag",
-					value=tag.replace('\\ ', ' ')
+					value=tag
 				)
 			)
 

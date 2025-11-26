@@ -1,4 +1,4 @@
-from gi.repository import Nautilus, GObject, Gio, Gtk
+from gi.repository import Nautilus, GObject, Gio
 from typing import List, Literal
 
 from nautilus_tmsu_dialog import NautilusTMSUAddDialog, NautilusTMSUEditDialog

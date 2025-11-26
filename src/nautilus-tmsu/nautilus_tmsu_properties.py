@@ -1,7 +1,7 @@
 from gi.repository import Nautilus, GObject, Gio
 from typing import List
 
-from nautilus_tmsu_utils import get_tmsu_tags, which_tmsu
+from nautilus_tmsu_utils import get_tmsu_tags
 
 
 class NautilusTMSUProperties(GObject.Object, Nautilus.PropertiesModelProvider):

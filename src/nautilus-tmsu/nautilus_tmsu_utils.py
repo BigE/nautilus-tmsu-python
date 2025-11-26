@@ -7,7 +7,7 @@ from typing import List
 
 try:
 	gi.require_version('Gtk', '4.0')
-	from gi.repository import Gio, Gtk, Nautilus
+	from gi.repository import Gio, Nautilus
 except ValueError as e:
 	print(f"Error loading GTK 4.0: {e}")
 	sys.exit(1)

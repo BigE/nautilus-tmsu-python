@@ -59,6 +59,10 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		completion.set_model(completion_model)
 		completion.set_text_column(0)
 
+		# completion logic
+		completion.set_match_func(self._completion_match, entry)
+		completion.connect("match-selected", self.on_match_selected, entry)
+
 		if self.is_single_directory():
 			switch_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, hexpand=True)
 			vbox.append(switch_box)
@@ -79,6 +83,68 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 
 		self.set_child(vbox)
 		self.set_default_widget(save_button)
+
+	def get_current_word_info(self, entry: Gtk.Entry):
+		"""
+		Helper to find the word under the cursor.
+		Returns: (word_text, start_index, end_index)
+		"""
+		text = entry.get_text()
+		cursor_pos = entry.get_position()
+
+		# Find the start of the word (move left until space or start)
+		start = cursor_pos
+		while start > 0 and text[start - 1] != ' ':
+			start -= 1
+
+		# Find the end of the word (move right until space or end)
+		end = cursor_pos
+		while end < len(text) and text[end] != ' ':
+			end += 1
+
+		return text[start:end], start, end
+
+	def on_match_selected(self, completion, model, iter, entry: Gtk.Entry):
+		"""
+		Custom insertion: Replaces only the current word, not the whole line.
+		"""
+		selected_word = model[iter][0]
+		current_word, start, end = self.get_current_word_info(entry)
+
+		# Get the current full text
+		full_text = entry.get_text()
+
+		# Construct the new text:
+		# (Text before word) + (Selected completion) + (Text after word)
+		new_text = full_text[:start] + selected_word + full_text[end:]
+
+		entry.set_text(new_text)
+
+		# Move cursor to the end of the inserted word
+		entry.set_position(start + len(selected_word))
+
+		# Return True to stop the default handler (which would replace the whole line)
+		return True
+
+	def _completion_match(self, completion, key, iter, entry: Gtk.Entry):
+		"""
+		Custom matcher: checks if the model row matches the current word fragment.
+		"""
+		# Get the word currently being typed
+		current_word, _, _ = self.get_current_word_info(entry)
+
+		# If the word is empty, don't show completion
+		if not current_word:
+			return False
+
+		# Get the potential match from the model
+		model = completion.get_model()
+		if not model:
+			return False
+		row_value = model[iter][0]
+
+		# Check if the model value starts with our partial word (case insensitive)
+		return row_value.lower().startswith(current_word.lower())
 
 	def _on_clicked_add_tags(self, button: Gtk.Button, entry: Gtk.Entry, switch: Gtk.Switch | None):
 		text = str(entry.get_text())

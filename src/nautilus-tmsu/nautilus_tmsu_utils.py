@@ -15,24 +15,24 @@ except ValueError as e:
 	sys.exit(1)
 
 
-def add_tmsu_tags(files: List[str], tags: List[str], recursive: bool=False, tmsu="tmsu"):
+def add_tmsu_tags(files: List[str], tags: List[str], notification: bool=True, recursive: bool=False, tmsu="tmsu"):
 	cwd = os.path.dirname(files[0]) if not os.path.isdir(files[0]) else files[0]
 	args = ["tag"]
 	if recursive:
 		args.append("-r")
-	args += [f"--tags=\"{" ".join(tags)}\"", " ".join(files)]
+	args += [f"--tags={" ".join(tags)}", " ".join(files)]
 	thread = threading.Thread(
 		target=run_tmsu_command,
 		args=args,
-		kwargs={"cwd": cwd, "notification": True, "tmsu": tmsu},
+		kwargs={"cwd": cwd, "notification": notification, "tmsu": tmsu},
 		daemon=True
 	)
 	thread.start()
 
 
-def delete_tmsu_tag(file: str, tag: str, tmsu="tmsu"):
+def delete_tmsu_tag(file: str, tag: str, notification: bool=False, tmsu="tmsu"):
 	cwd = os.path.dirname(file if os.path.isdir(file) else os.path.dirname(file))
-	run_tmsu_command("untag", file, tag, cwd=cwd, notification=True, tmsu=tmsu)
+	run_tmsu_command("untag", file, tag, cwd=cwd, notification=notification, tmsu=tmsu)
 
 
 def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None, tmsu="tmsu"):
@@ -61,7 +61,7 @@ def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None
 	if output is None:
 		return []
 
-	return [item.replace('\\ ', ' ') for item in output.strip("\n").split("\n")[1:]]
+	return output.strip("\n").split("\n")[1:]
 
 
 def get_path_from_file_info(file_info: Nautilus.FileInfo, parent=False):

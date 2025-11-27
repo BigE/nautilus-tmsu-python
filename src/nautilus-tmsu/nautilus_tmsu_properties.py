@@ -22,7 +22,7 @@ class NautilusTMSUProperties(GObject.Object, Nautilus.PropertiesModelProvider):
 			tags_model.append(
 				Nautilus.PropertiesItem(
 					name="Tag",
-					value=tag
+					value=tag.replace('\\ ', ' ')
 				)
 			)
 

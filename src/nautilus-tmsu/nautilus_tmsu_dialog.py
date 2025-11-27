@@ -173,7 +173,7 @@ class NautilusTMSUEditDialog(NautilusTMSUDialog):
 		tag_listbox.add_css_class("boxed-list")
 
 		for tag in self.get_existing_tags():
-			row = Adw.ActionRow(title=tag)
+			row = Adw.ActionRow(title=tag.replace('\\ ', ' '))
 			tag_listbox.append(row)
 			delete_button = Gtk.Button(icon_name="user-trash-symbolic")
 			delete_button.add_css_class("destructive-action")

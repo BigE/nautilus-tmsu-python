@@ -1,10 +1,13 @@
-from gi.repository import Nautilus, GObject, Gio
-from typing import List
+import os
 
+from gi.repository import Nautilus, Gio, GObject
+from typing import Any, List
+
+from nautilus_tmsu_object import NautilusTMSUObject
 from nautilus_tmsu_utils import get_path_from_file_info, get_tmsu_tags, is_tmsu_db
 
 
-class NautilusTMSUProperties(GObject.Object, Nautilus.PropertiesModelProvider):
+class NautilusTMSUProperties(NautilusTMSUObject, GObject.Object, Nautilus.PropertiesModelProvider):
 	def get_models(
 		self,
 		files: List[Nautilus.FileInfo],

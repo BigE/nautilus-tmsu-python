@@ -11,10 +11,11 @@ except ValueError as e:
 
 from typing import List
 
+from nautilus_tmsu_object import NautilusTMSUObject
 from nautilus_tmsu_utils import add_tmsu_tags, delete_tmsu_tag, get_path_from_file_info, get_tmsu_tags
 
 
-class NautilusTMSUDialog(Gtk.ApplicationWindow):
+class NautilusTMSUDialog(NautilusTMSUObject, Gtk.ApplicationWindow):
 	_files: List[Nautilus.FileInfo]
 
 	def __init__(self, title, files: List[Nautilus.FileInfo]):
@@ -22,7 +23,8 @@ class NautilusTMSUDialog(Gtk.ApplicationWindow):
 		if not isinstance(application, Gtk.Application) or application.get_application_id() != "org.gnome.Nautilus":
 			raise TypeError("Unable to find Gtk.Application with application_id of \"org.gnome.Nautilus\"")
 		window = application.get_active_window()
-		super().__init__(application=application, modal=True, title=title, transient_for=window)
+		super(NautilusTMSUObject, self).__init__()
+		super(Gtk.ApplicationWindow, self).__init__(application=application, modal=True, title=title, transient_for=window)
 		self._files = files
 		vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
 		vbox.set_margin_bottom(20)

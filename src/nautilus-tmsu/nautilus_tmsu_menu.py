@@ -3,19 +3,20 @@ import sys
 
 try:
 	gi.require_version("Gtk", "4.0")
-	from gi.repository import Nautilus, GObject, Gio, Gtk
+	from gi.repository import Nautilus, Gio, GObject, Gtk
 except ValueError as e:
 	print(f"Failed to import Gtk 4.0: {str(e)}")
 	sys.exit(1)
 from typing import List, Literal
 
 from nautilus_tmsu_dialog import NautilusTMSUAddDialog, NautilusTMSUEditDialog
+from nautilus_tmsu_object import NautilusTMSUObject
 from nautilus_tmsu_utils import get_path_from_file_info, init_tmsu_db, is_tmsu_db, which_tmsu
 
 MENU_ITEM_NAME = "NautilusTMSUMenu"
 
 
-class NautilusTMSUMenu(GObject.Object, Nautilus.MenuProvider):
+class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider):
 	def get_file_items(
 		self,
 		files: List[Nautilus.FileInfo],
@@ -23,19 +24,9 @@ class NautilusTMSUMenu(GObject.Object, Nautilus.MenuProvider):
 		if len(files) == 0:
 			return []
 
-		for file_info in files:
-			file = file_info.get_location()
-			if not isinstance(file, Gio.File):
-				raise TypeError("Unknown type {file.__class__}")
-			path = None
-			if file_info.is_directory():
-				path = file.get_path()
-			else:
-				parent = file.get_parent()
-				if parent and isinstance(parent, Gio.File):
-					path = parent.get_path()
-			if path is None or not is_tmsu_db(path):
-				return []
+		path = get_path_from_file_info(files[0], not files[0].is_directory())
+		if path is None or not is_tmsu_db(path):
+			return []
 
 		menuitem = self._build_tmsu_menu("Tags", "TMSU Tags", files)
 

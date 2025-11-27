@@ -14,13 +14,15 @@ except ValueError as e:
 	print(f"Error loading GTK 4.0: {e}")
 	sys.exit(1)
 
+__DEBUG__ = bool(os.getenv("NAUTILUS_TMSU_DEBUG"))
+
 
 def add_tmsu_tags(files: List[str], tags: List[str], notification: bool=True, recursive: bool=False, tmsu="tmsu"):
 	cwd = os.path.dirname(files[0]) if not os.path.isdir(files[0]) else files[0]
 	args = ["tag"]
 	if recursive:
 		args.append("-r")
-	args += [f"--tags={" ".join(tags)}", " ".join(files)]
+	args += [f"--tags={" ".join(tags)}"] + files
 	thread = threading.Thread(
 		target=run_tmsu_command,
 		args=args,
@@ -37,22 +39,18 @@ def delete_tmsu_tag(file: str, tag: str, notification: bool=False, tmsu="tmsu"):
 
 def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None, tmsu="tmsu"):
 	args = ["tags", "-1"]
+	path = None
 
 	if file_info:
-		file = file_info.get_location()
-		if not isinstance(file, Gio.File):
-			raise ValueError()
-		path = file.get_path()
+		path = get_path_from_file_info(file_info)
 		if path is None:
-			raise ValueError(f"Cannot find file {file.get_uri()}")
+			raise ValueError(f"Cannot find file {file_info.get_uri()}")
 		if cwd is None:
 			if file_info.is_directory():
-				cwd = str(file.get_path())
+				cwd = path
 			else:
-				parent = file.get_parent()
-				if isinstance(parent, Gio.File):
-					cwd = str(parent.get_path())
-		args.append(str(path))
+				cwd = get_path_from_file_info(file_info, True)
+		args.append(path)
 	elif cwd is None:
 		raise ValueError("You must specify file_info or cwd")
 
@@ -92,6 +90,8 @@ def run_tmsu_command(*args, cwd=None, notification=False, tmsu="tmsu"):
 	args = (tmsu, ) + args
 
 	try:
+		if __DEBUG__:
+			print(args)
 		result = subprocess.run(args, capture_output=True, cwd=cwd)
 	except Exception as e:
 		if notification:

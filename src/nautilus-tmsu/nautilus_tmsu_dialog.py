@@ -9,13 +9,15 @@ except ValueError as e:
 	print(f"Error loading Adw 1: {e}")
 	sys.exit(1)
 
-from typing import List
+from typing import Callable, List, TypeAlias
 
-from nautilus_tmsu_object import NautilusTMSUObject
-from nautilus_tmsu_utils import add_tmsu_tags, delete_tmsu_tag, get_path_from_file_info, get_tmsu_tags
+from nautilus_tmsu_utils import get_path_from_file_info, tmsu_add_tags, tmsu_delete_tag, tmsu_get_tags, tmsu_info, tmsu_untag_file
 
 
-class NautilusTMSUDialog(NautilusTMSUObject, Gtk.ApplicationWindow):
+TMSUCallback: TypeAlias = Callable[[str, str], None]
+
+
+class NautilusTMSUDialog(Gtk.ApplicationWindow):
 	_files: List[Nautilus.FileInfo]
 
 	def __init__(self, title, files: List[Nautilus.FileInfo]):
@@ -23,10 +25,9 @@ class NautilusTMSUDialog(NautilusTMSUObject, Gtk.ApplicationWindow):
 		if not isinstance(application, Gtk.Application) or application.get_application_id() != "org.gnome.Nautilus":
 			raise TypeError("Unable to find Gtk.Application with application_id of \"org.gnome.Nautilus\"")
 		window = application.get_active_window()
-		super(NautilusTMSUObject, self).__init__()
-		super(Gtk.ApplicationWindow, self).__init__(application=application, modal=True, title=title, transient_for=window)
+		super().__init__(application=application, modal=True, title=title, transient_for=window)
 		self._files = files
-		vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+		vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, hexpand=True, vexpand=True)
 		vbox.set_margin_bottom(20)
 		vbox.set_margin_end(20)
 		vbox.set_margin_start(20)
@@ -56,7 +57,7 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		completion_model = Gtk.ListStore(str)
 		cwd = get_path_from_file_info(files[0], not files[0].is_directory())
 		switch = None
-		for item in get_tmsu_tags(cwd=cwd):
+		for item in tmsu_get_tags(cwd=cwd):
 			completion_model.append([item, ])
 		completion.set_model(completion_model)
 		completion.set_text_column(0)
@@ -159,19 +160,22 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 			path = location.get_path()
 			if path:
 				files.append(path)
-		add_tmsu_tags(files, tags, recursive=switch.get_active() if switch else False)
+		tmsu_add_tags(files, tags, recursive=switch.get_active() if switch else False)
 		self.destroy()
 
-class NautilusTMSUEditDialog(NautilusTMSUDialog):
-	def __init__(self, file: Nautilus.FileInfo):
-		super().__init__("TMSU Edit Tags", [file, ])
+
+class NautilusTMSUEditTagListDialog(NautilusTMSUDialog):
+	def __init__(self, title, file_info: Nautilus.FileInfo, tmsu_callback: TMSUCallback):
+		super().__init__(title, [file_info, ])
 
 		self.set_default_size(400, 500)
 
 		vbox = self.get_child()
 		assert isinstance(vbox, Gtk.Box)
+		scroll_window = Gtk.ScrolledWindow(vexpand=True)
+		vbox.append(scroll_window)
 		tag_listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-		vbox.append(tag_listbox)
+		scroll_window.set_child(tag_listbox)
 		tag_listbox.add_css_class("boxed-list")
 
 		for tag in self.get_existing_tags():
@@ -181,21 +185,70 @@ class NautilusTMSUEditDialog(NautilusTMSUDialog):
 			delete_button.add_css_class("destructive-action")
 			delete_button.add_css_class("flat")
 			row.add_suffix(delete_button)
-			delete_button.connect("clicked", lambda btn: self.delete_existing_tag(file, tag, row, tag_listbox))
+			delete_button.connect("clicked", self.on_delete_button_clicked, file_info, tag, row, tag_listbox, tmsu_callback)
 
 		self.set_child(vbox)
 
-	def delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Gtk.ListBoxRow, tag_listbox: Gtk.ListBox):
-		path = get_path_from_file_info(file_info)
+	@property
+	def delete_dialog_detail(self) -> str:
+		raise NotImplementedError()
+
+	def delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox, tmsu_callback: TMSUCallback):
+		path = get_path_from_file_info(file_info, not file_info.is_directory())
 		if path:
 			try:
-				delete_tmsu_tag(str(path), tag)
+				tmsu_callback(path, tag)
 				tag_listbox.remove(row)
 			except:
 				pass
 
 	def get_existing_tags(self):
+		raise NotImplementedError()
+
+	def on_delete_button_clicked(self, button: Gtk.Button, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox, tmsu_callback: TMSUCallback):
+		dialog = Gtk.AlertDialog()
+		dialog.set_buttons(["OK", "Cancel"])
+		dialog.set_cancel_button(1)
+		dialog.set_default_button(0)
+		dialog.set_detail(self.delete_dialog_detail.format(tag=tag, file=file_info.get_uri()))
+		dialog.set_message("Confirm Tag Deletion")
+		dialog.choose(self, None, self.on_delete_dialog_choose_finish, file_info, tag, row, tag_listbox, tmsu_callback)
+
+	def on_delete_dialog_choose_finish(self, dialog: Gtk.AlertDialog, result: Gio.AsyncResult, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox, tmsu_callback: TMSUCallback):
+		response = dialog.choose_finish(result)
+		if response == 0:
+			self.delete_existing_tag(file_info, tag, row, tag_listbox, tmsu_callback)
+
+
+class NautilusTMSUEditDialog(NautilusTMSUEditTagListDialog):
+	def __init__(self, file: Nautilus.FileInfo):
+		super().__init__("TMSU Edit Tags", file, tmsu_untag_file)
+
+	@property
+	def delete_dialog_detail(self):
+		return "Are you sure you want to remove the tag \"{tag}\" from the file {file}"
+
+	def get_existing_tags(self):
 		tags = []
 		for file in self._files:
-			tags += get_tmsu_tags(file_info=file)
+			tags += tmsu_get_tags(file_info=file)
 		return set(tags)
+
+
+class NautilusTMSUManageDialog(NautilusTMSUEditTagListDialog):
+	def __init__(self, file: Nautilus.FileInfo):
+		super().__init__("TMSU Manage Tags", file, tmsu_delete_tag)
+
+	@property
+	def delete_dialog_detail(self):
+		return "Are you sure you want to remove the tag \"{tag}\" from the database at {file}?"
+
+	def get_existing_tags(self):
+		file_info = self._files[0]
+		result = tmsu_info(file_info)
+		if not result:
+			return []
+		matches = re.findall(r"Root path: ([^\n]+)", result, re.RegexFlag.MULTILINE)
+		if len(matches) == 0:
+			return []
+		return tmsu_get_tags(None, cwd=matches[0])

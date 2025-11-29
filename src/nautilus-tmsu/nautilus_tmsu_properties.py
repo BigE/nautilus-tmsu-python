@@ -4,7 +4,7 @@ from gi.repository import Nautilus, Gio, GObject
 from typing import Any, List
 
 from nautilus_tmsu_object import NautilusTMSUObject
-from nautilus_tmsu_utils import get_path_from_file_info, get_tmsu_tags, is_tmsu_db
+from nautilus_tmsu_utils import get_path_from_file_info, tmsu_get_tags, is_in_tmsu_db
 
 
 class NautilusTMSUProperties(NautilusTMSUObject, GObject.Object, Nautilus.PropertiesModelProvider):
@@ -16,12 +16,12 @@ class NautilusTMSUProperties(NautilusTMSUObject, GObject.Object, Nautilus.Proper
 			return []
 
 		path = get_path_from_file_info(files[0], not files[0].is_directory())
-		if path is None or not is_tmsu_db(path):
+		if path is None or not is_in_tmsu_db(path):
 			return []
 
 		tags_model = Gio.ListStore(item_type=Nautilus.PropertiesItem)
 
-		for tag in get_tmsu_tags(files[0]):
+		for tag in tmsu_get_tags(files[0]):
 			tags_model.append(
 				Nautilus.PropertiesItem(
 					name="Tag",

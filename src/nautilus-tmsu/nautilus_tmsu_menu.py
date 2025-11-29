@@ -9,14 +9,27 @@ except ValueError as e:
 	sys.exit(1)
 from typing import List, Literal
 
-from nautilus_tmsu_dialog import NautilusTMSUAddDialog, NautilusTMSUEditDialog
+from nautilus_tmsu_dialog import NautilusTMSUAddDialog, NautilusTMSUEditDialog, NautilusTMSUManageDialog
 from nautilus_tmsu_object import NautilusTMSUObject
-from nautilus_tmsu_utils import get_path_from_file_info, init_tmsu_db, is_tmsu_db, which_tmsu
+from nautilus_tmsu_utils import get_path_from_file_info, is_in_tmsu_db, tmsu_init_db
 
 MENU_ITEM_NAME = "NautilusTMSUMenu"
 
 
 class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider):
+	def __init__(self) -> None:
+		super().__init__()
+		self._current_background_folder: Nautilus.FileInfo | None = None
+		self._current_is_in_tmsu_db: bool = False
+
+	@property
+	def current_background_folder(self):
+		return self._current_background_folder
+
+	@property
+	def current_is_in_tmsu_db(self):
+		return self._current_is_in_tmsu_db
+
 	def get_file_items(
 		self,
 		files: List[Nautilus.FileInfo],
@@ -25,7 +38,7 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 			return []
 
 		path = get_path_from_file_info(files[0], not files[0].is_directory())
-		if path is None or not is_tmsu_db(path):
+		if path is None or not is_in_tmsu_db(path):
 			return []
 
 		menuitem = self._build_tmsu_menu("Tags", "TMSU Tags", files)
@@ -38,11 +51,16 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 		self,
 		current_folder: Nautilus.FileInfo,
 	) -> List[Nautilus.MenuItem]:
+		bypass = True if current_folder == self.current_background_folder else False
+		self._current_background_folder = current_folder
 		path = get_path_from_file_info(current_folder)
+
+		if path and not bypass:
+			self._current_is_in_tmsu_db = is_in_tmsu_db(path)
 
 		if path is None:
 			return []
-		elif not is_tmsu_db(path):
+		elif not self.current_is_in_tmsu_db:
 			return [
 				self._build_tmsu_init(current_folder)
 			]
@@ -60,7 +78,7 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 
 		path = get_path_from_file_info(directory)
 		if path:
-			init_tmsu_db(path)
+			tmsu_init_db(path)
 
 	def on_menu_init_activated(self, menu_item: Nautilus.MenuItem, directory: Nautilus.FileInfo):
 		application = Gtk.Application.get_default()
@@ -72,19 +90,21 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 		dialog.set_buttons(["Cancel", "OK"])
 		dialog.choose(window, None, self.on_alert_dialog_chosen, directory)
 
-	def on_menu_item_activated(self, menu_item: Nautilus.MenuItem, action: Literal["add", "edit"], files: List[Nautilus.FileInfo]):
+	def on_menu_item_activated(self, menu_item: Nautilus.MenuItem, action: Literal["add", "edit", "manage"], files: List[Nautilus.FileInfo]):
 		if action == "add":
 			dialog = NautilusTMSUAddDialog(files)
 		elif action == "edit":
 			if len(files) != 1:
 				raise TypeError(f"Edit can only work with 1 file, got {len(files)} files")
 			dialog = NautilusTMSUEditDialog(files[0])
+		elif action == "manage":
+			dialog = NautilusTMSUManageDialog(files[0])
 		else:
 			raise ValueError(f"Unknown action: {action}")
 
 		dialog.present()
 
-	def _build_menu_item(self, name: str, label: str, action: Literal["add", "edit"] | None = None, files: List[Nautilus.FileInfo] = []) -> Nautilus.MenuItem:
+	def _build_menu_item(self, name: str, label: str, action: Literal["add", "edit", "manage"] | None = None, files: List[Nautilus.FileInfo] = []) -> Nautilus.MenuItem:
 		menuitem = Nautilus.MenuItem(name=name, label=label)
 		if action and len(files):
 			menuitem.connect("activate", self.on_menu_item_activated, action, files)
@@ -109,5 +129,7 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 		if len(files) == 1:
 			edit_tags_menuitem = self._build_menu_item(f"{name}::Edit", "Edit Tags", "edit", files)
 			submenu.append_item(edit_tags_menuitem)
+			manage_tags_menuitem = self._build_menu_item(f"{name}::Manage", "Manage Tags", "manage", files=files)
+			submenu.append_item(manage_tags_menuitem)
 
 		return menuitem

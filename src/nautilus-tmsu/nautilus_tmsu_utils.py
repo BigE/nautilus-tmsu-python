@@ -17,14 +17,14 @@ except ValueError as e:
 __DEBUG__ = bool(os.getenv("NAUTILUS_TMSU_DEBUG"))
 
 
-def add_tmsu_tags(files: List[str], tags: List[str], notification: bool=True, recursive: bool=False, tmsu="tmsu"):
+def tmsu_add_tags(files: List[str], tags: List[str], notification: bool=True, recursive: bool=False, tmsu="tmsu"):
 	cwd = os.path.dirname(files[0]) if not os.path.isdir(files[0]) else files[0]
 	args = ["tag"]
 	if recursive:
 		args.append("-r")
 	args += [f"--tags={" ".join(tags)}"] + files
 	thread = threading.Thread(
-		target=run_tmsu_command,
+		target=tmsu_run_command,
 		args=args,
 		kwargs={"cwd": cwd, "notification": notification, "tmsu": tmsu},
 		daemon=True
@@ -32,12 +32,23 @@ def add_tmsu_tags(files: List[str], tags: List[str], notification: bool=True, re
 	thread.start()
 
 
-def delete_tmsu_tag(file: str, tag: str, notification: bool=False, tmsu="tmsu"):
+def tmsu_delete_tag(cwd: str, tag: str, notification: bool=False, tmsu="tmsu"):
+	tmsu_run_command("delete", tag, cwd=cwd, notification=notification, tmsu=tmsu)
+
+
+def tmsu_info(file_info: Nautilus.FileInfo, tmsu="tmsu"):
+	path = get_path_from_file_info(file_info, not file_info.is_directory())
+	if not path:
+		return None
+	return tmsu_run_command("info", cwd=path)
+
+
+def tmsu_untag_file(file: str, tag: str, notification: bool=False, tmsu="tmsu"):
 	cwd = os.path.dirname(file if os.path.isdir(file) else os.path.dirname(file))
-	run_tmsu_command("untag", file, tag, cwd=cwd, notification=notification, tmsu=tmsu)
+	tmsu_run_command("untag", file, tag, cwd=cwd, notification=notification, tmsu=tmsu)
 
 
-def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None, tmsu="tmsu"):
+def tmsu_get_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None, tmsu="tmsu"):
 	args = ["tags", "-1"]
 	path = None
 
@@ -54,7 +65,7 @@ def get_tmsu_tags(file_info: Nautilus.FileInfo | None=None, cwd: str | None=None
 	elif cwd is None:
 		raise ValueError("You must specify file_info or cwd")
 
-	output = run_tmsu_command(*args, cwd=cwd, tmsu=tmsu)
+	output = tmsu_run_command(*args, cwd=cwd, tmsu=tmsu)
 
 	if output is None:
 		return []
@@ -75,17 +86,17 @@ def get_path_from_file_info(file_info: Nautilus.FileInfo, parent=False):
 
 
 
-def init_tmsu_db(path, tmsu="tmsu"):
-	if is_tmsu_db(path):
+def tmsu_init_db(path, tmsu="tmsu"):
+	if is_in_tmsu_db(path):
 		raise ValueError(f"Path {path} already has a TMSU database")
-	run_tmsu_command("init", cwd=path, notification=True, tmsu=tmsu)
+	tmsu_run_command("init", cwd=path, notification=True, tmsu=tmsu)
 
 
-def is_tmsu_db(path: str, tmsu="tmsu"):
-	return False if run_tmsu_command("info", cwd=path, tmsu=tmsu) is None else True
+def is_in_tmsu_db(path: str, tmsu="tmsu"):
+	return False if tmsu_run_command("info", cwd=path, tmsu=tmsu) is None else True
 
 
-def run_tmsu_command(*args, cwd=None, notification=False, tmsu="tmsu"):
+def tmsu_run_command(*args, cwd=None, notification=False, tmsu="tmsu"):
 	tmsu = which_tmsu(tmsu)
 	args = (tmsu, ) + args
 

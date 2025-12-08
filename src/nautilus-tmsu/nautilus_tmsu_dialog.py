@@ -165,39 +165,25 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 
 
 class NautilusTMSUEditTagListDialog(NautilusTMSUDialog):
-	def __init__(self, title, file_info: Nautilus.FileInfo, tmsu_callback: TMSUCallback):
+	def __init__(self, title, file_info: Nautilus.FileInfo, tmsu_callback: TMSUCallback, can_add_item: bool=False):
 		super().__init__(title, [file_info, ])
 
+		self._can_add_item = can_add_item
+		self._file_info = file_info
+		self._tmsu_callback = tmsu_callback
 		self.set_default_size(400, 500)
 
-		vbox = self.get_child()
-		assert isinstance(vbox, Gtk.Box)
-		scroll_window = Gtk.ScrolledWindow(vexpand=True)
-		vbox.append(scroll_window)
-		tag_listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-		scroll_window.set_child(tag_listbox)
-		tag_listbox.add_css_class("boxed-list")
-
-		for tag in self.get_existing_tags():
-			row = Adw.ActionRow(title=tag.replace('\\ ', ' '))
-			tag_listbox.append(row)
-			delete_button = Gtk.Button(icon_name="user-trash-symbolic")
-			delete_button.add_css_class("destructive-action")
-			delete_button.add_css_class("flat")
-			row.add_suffix(delete_button)
-			delete_button.connect("clicked", self.on_delete_button_clicked, file_info, tag, row, tag_listbox, tmsu_callback)
-
-		self.set_child(vbox)
+		self._create_child_box()
 
 	@property
 	def delete_dialog_detail(self) -> str:
 		raise NotImplementedError()
 
-	def delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox, tmsu_callback: TMSUCallback):
+	def delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox):
 		path = get_path_from_file_info(file_info, not file_info.is_directory())
 		if path:
 			try:
-				tmsu_callback(path, tag)
+				self._tmsu_callback(path, tag)
 				tag_listbox.remove(row)
 			except:
 				pass
@@ -205,24 +191,63 @@ class NautilusTMSUEditTagListDialog(NautilusTMSUDialog):
 	def get_existing_tags(self):
 		raise NotImplementedError()
 
-	def on_delete_button_clicked(self, button: Gtk.Button, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox, tmsu_callback: TMSUCallback):
+	def on_add_button_clicked(self, button: Gtk.Button):
+		dialog = NautilusTMSUAddDialog([self._file_info])
+		dialog.set_transient_for(self)
+		dialog.present()
+
+	def on_delete_button_clicked(self, button: Gtk.Button, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox):
 		dialog = Gtk.AlertDialog()
 		dialog.set_buttons(["OK", "Cancel"])
 		dialog.set_cancel_button(1)
 		dialog.set_default_button(0)
-		dialog.set_detail(self.delete_dialog_detail.format(tag=tag, file=file_info.get_uri()))
+		dialog.set_detail(self.delete_dialog_detail.format(tag=tag, file=self._file_info.get_uri()))
 		dialog.set_message("Confirm Tag Deletion")
-		dialog.choose(self, None, self.on_delete_dialog_choose_finish, file_info, tag, row, tag_listbox, tmsu_callback)
+		dialog.choose(self, None, self.on_delete_dialog_choose_finish, tag, row, tag_listbox)
 
-	def on_delete_dialog_choose_finish(self, dialog: Gtk.AlertDialog, result: Gio.AsyncResult, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox, tmsu_callback: TMSUCallback):
+	def on_delete_dialog_choose_finish(self, dialog: Gtk.AlertDialog, result: Gio.AsyncResult, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox):
 		response = dialog.choose_finish(result)
 		if response == 0:
-			self.delete_existing_tag(file_info, tag, row, tag_listbox, tmsu_callback)
+			self.delete_existing_tag(self._file_info, tag, row, tag_listbox)
+
+	def _create_child_box(self):
+		vbox = self.get_child()
+		assert isinstance(vbox, Gtk.Box)
+		child = vbox.get_first_child()
+		while child:
+			vbox.remove(child)
+			child = vbox.get_first_child()
+		scroll_window = Gtk.ScrolledWindow(vexpand=True)
+		vbox.append(scroll_window)
+		tag_listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+		scroll_window.set_child(tag_listbox)
+		tag_listbox.add_css_class("boxed-list")
+
+		if self._can_add_item:
+			row = Adw.ActionRow()
+			tag_listbox.append(row)
+			add_button = Gtk.Button(icon_name="list-add-symbolic")
+			add_button.add_css_class("flat")
+			add_button.add_css_class("pill")
+			add_button.connect("clicked", self.on_add_button_clicked)
+			row.set_child(add_button)
+
+		for tag in self.get_existing_tags():
+			row = Adw.ActionRow(title=tag.replace('\\ ', ' '))
+			tag_listbox.append(row)
+			delete_button = Gtk.Button(icon_name="user-trash-symbolic")
+			delete_button.add_css_class("destructive-action")
+			delete_button.add_css_class("flat")
+			delete_button.add_css_class("pill")
+			row.add_suffix(delete_button)
+			delete_button.connect("clicked", self.on_delete_button_clicked, tag, row, tag_listbox)
+
+		self.set_child(vbox)
 
 
 class NautilusTMSUEditDialog(NautilusTMSUEditTagListDialog):
 	def __init__(self, file: Nautilus.FileInfo):
-		super().__init__("TMSU Edit Tags", file, tmsu_untag_file)
+		super().__init__("TMSU Edit Tags", file, tmsu_untag_file, True)
 
 	@property
 	def delete_dialog_detail(self):

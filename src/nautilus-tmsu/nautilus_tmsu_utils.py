@@ -1,4 +1,5 @@
 import gi
+import logging
 import os
 import subprocess
 import sys
@@ -14,7 +15,8 @@ except ValueError as e:
 	print(f"Error loading GTK 4.0: {e}")
 	sys.exit(1)
 
-__DEBUG__ = bool(os.getenv("NAUTILUS_TMSU_DEBUG"))
+DEBUG_VERBOSE_LEVEL = 9
+logger = logging.getLogger("nautilus-tmsu")
 
 
 def tmsu_add_tags(files: List[str], tags: List[str], notification: bool=True, recursive: bool=False, tmsu="tmsu"):
@@ -101,8 +103,7 @@ def tmsu_run_command(*args, cwd=None, notification=False, tmsu="tmsu"):
 	args = (tmsu, ) + args
 
 	try:
-		if __DEBUG__:
-			print(args)
+		logger.log(DEBUG_VERBOSE_LEVEL, args)
 		result = subprocess.run(args, capture_output=True, cwd=cwd)
 	except Exception as e:
 		if notification:

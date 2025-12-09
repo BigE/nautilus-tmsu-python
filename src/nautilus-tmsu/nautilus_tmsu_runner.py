@@ -4,15 +4,12 @@ import queue
 import threading
 
 from gi.repository import GObject, Nautilus # type: ignore
-from typing import Self, TypedDict
+from typing import TypedDict
 
 from nautilus_tmsu_commands import NautilusTMSUCommand, NautilusTMSUCommandCallback
 from nautilus_tmsu_utils import get_path_from_file_info
 
 logger = logging.getLogger('nautilus-tmsu')
-
-WORKER_QUEUE = queue.Queue()
-
 
 class classproperty:
 	def __init__(self, method) -> None:
@@ -29,13 +26,13 @@ class NautilusTMSURunnerQueue(TypedDict):
 
 
 class NautilusTMSURunner(GObject.Object):
-	_instance = None
+	_instance: 'NautilusTMSURunner'
 	_lock = threading.Lock()
 
-	def __new__(cls, *args, **kwargs) -> Self:
-		if not cls._instance:
+	def __new__(cls, *args, **kwargs) -> 'NautilusTMSURunner':
+		if not hasattr(cls, '_instance') or not cls._instance:
 			with cls._lock:
-				if not cls._instance:
+				if not hasattr(cls, '_instance') or not cls._instance:
 					cls._instance = super().__new__(cls, *args, **kwargs)
 		return cls._instance
 
@@ -47,7 +44,7 @@ class NautilusTMSURunner(GObject.Object):
 		self._queue = queue.Queue[NautilusTMSURunnerQueue]()
 		self._start_worker_thread()
 		GObject.timeout_add(5, self._keep_alive)
-		self._running = True
+		self._running: bool = True
 
 	@classproperty
 	def lock(cls):

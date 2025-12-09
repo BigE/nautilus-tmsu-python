@@ -13,7 +13,7 @@ handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 logger.addHandler(handler)
 
-logger.info(f"Initializing nautilus-tmsu: {__VERSION__}")
+logger.info(f"Initializing nautilus-tmsu: {__VERSION__} python: {sys.version}")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'nautilus-tmsu'))
 from nautilus_tmsu_runner import NautilusTMSURunner

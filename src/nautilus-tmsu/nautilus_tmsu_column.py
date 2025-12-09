@@ -31,7 +31,7 @@ class NautilusTMSUTask(object):
 class NautilusTMSUColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.InfoProvider):
 	def __init__(self, **kwargs) -> None:
 		super().__init__(**kwargs)
-		self._active_handlers = {}
+		self._active_handlers = dict[Nautilus.OperationHandle, NautilusTMSUCommand]()
 		self._runner = NautilusTMSURunner()
 
 	def cancel_update(self, provider: Nautilus.InfoProvider, handle: Nautilus.OperationHandle | None = None) -> None:

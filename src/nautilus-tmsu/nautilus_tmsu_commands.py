@@ -3,11 +3,12 @@ import subprocess
 
 from collections.abc import Callable
 from gi.repository import Nautilus # type: ignore
+from typing import Literal
 
 from nautilus_tmsu_utils import get_path_from_file_info, which_tmsu
 
 logger = logging.getLogger('nautilus-tmsu')
-NautilusTMSUCommandCallback = Callable[["NautilusTMSUCommand", str | None], False]
+NautilusTMSUCommandCallback = Callable[["NautilusTMSUCommand", str | None], Literal[False]]
 
 
 class NautilusTMSUCommand(object):
@@ -44,7 +45,7 @@ class NautilusTMSUCommand(object):
 		args = (self.tmsu, ) + self._args
 
 		try:
-			logger.log(9, f'command: CWD={self._cwd} {' '.join(args)}')
+			logger.log(9, f'command: CWD={self._cwd} {" ".join(args)}')
 			result = subprocess.run(args, capture_output=True, cwd=self._cwd)
 		except Exception as e:
 			logger.error(e)
@@ -53,7 +54,8 @@ class NautilusTMSUCommand(object):
 		if result.returncode != 0:
 			logger.log(9, result)
 			if self._log_error:
-				logger.error(f'command failed: {result.stderr}')
+				error_message = result.stderr.decode('UTF-8')
+				logger.error(f'command failed: {error_message}')
 			return None
 
 		return result.stdout.decode('UTF-8')
@@ -82,7 +84,7 @@ class NautilusTMSUCommandRecursiveMixin(NautilusTMSUCommandMixin):
 class NautilusTMSUCommandTagsMixin(NautilusTMSUCommandMixin):
 	def __init__(self, *args, tags: list[str] | None, **kwargs) -> None:
 		if tags is not None:
-			args += (f'--tags={' '.join(tags)}', )
+			args += (f'--tags={" ".join(tags)}', )
 		super().__init__(*args, **kwargs)
 
 

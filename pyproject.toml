@@ -1,0 +1,14 @@
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+# Automatically adds your source and mocks to PYTHONPATH
+pythonpath = ["src", "tests/mocks"]
+norecursedirs = ["tests/mocks"]
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = true
+files = ["src"]

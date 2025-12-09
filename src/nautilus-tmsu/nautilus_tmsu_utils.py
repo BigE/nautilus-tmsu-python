@@ -1,6 +1,6 @@
 import os
 
-from gi.repository import Nautilus
+from gi.repository import Nautilus # type: ignore
 from urllib.parse import unquote
 
 

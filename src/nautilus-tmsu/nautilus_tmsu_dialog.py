@@ -50,7 +50,7 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 
 		vbox = self.get_child()
 		assert isinstance(vbox, Gtk.Box)
-		vbox.append(Gtk.Label(label=f"Add (space-separated) tags to {len(files)} file{"" if len(files) == 1 else "s"}"))
+		vbox.append(Gtk.Label(label=f"Add (space-separated) tags to {len(files)} file{'' if len(files) == 1 else 's'}"))
 		entry = Gtk.Entry(activates_default=True)
 		vbox.append(entry)
 		completion = Gtk.EntryCompletion()

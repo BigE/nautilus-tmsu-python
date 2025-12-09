@@ -4,15 +4,15 @@ import sys
 
 try:
 	gi.require_version("Adw", "1")
-	from gi.repository import Adw, Gio, Gtk, Nautilus
+	from gi.repository import Adw, Gio, Gtk, Nautilus # type: ignore
 except ValueError as e:
 	print(f"Error loading Adw 1: {e}")
 	sys.exit(1)
 
 from typing import Callable, List, TypeAlias
 
-from nautilus_tmsu_utils import get_path_from_file_info, tmsu_add_tags, tmsu_delete_tag, tmsu_get_tags, tmsu_info, tmsu_untag_file
-
+from nautilus_tmsu_commands import NautilusTMSUCommandDelete, NautilusTMSUCommandTag, NautilusTMSUCommandTags, NautilusTMSUCommandUntag
+from nautilus_tmsu_runner import NautilusTMSURunner, find_tmsu_root
 
 TMSUCallback: TypeAlias = Callable[[str, str], None]
 
@@ -44,6 +44,7 @@ class NautilusTMSUDialog(Gtk.ApplicationWindow):
 class NautilusTMSUAddDialog(NautilusTMSUDialog):
 	def __init__(self, files: List[Nautilus.FileInfo]):
 		super().__init__("TMSU Add Tags", files)
+		self._runner = NautilusTMSURunner()
 
 		self.set_default_size(400, 150)
 
@@ -55,9 +56,9 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		completion = Gtk.EntryCompletion()
 		entry.set_completion(completion)
 		completion_model = Gtk.ListStore(str)
-		cwd = get_path_from_file_info(files[0], not files[0].is_directory())
 		switch = None
-		for item in tmsu_get_tags(cwd=cwd):
+		tags = NautilusTMSUCommandTags(files[0], True).execute()
+		for item in tags:
 			completion_model.append([item, ])
 		completion.set_model(completion_model)
 		completion.set_text_column(0)
@@ -80,7 +81,7 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		button_box.append(save_button)
 		save_button.connect("clicked", self._on_clicked_add_tags, entry, switch)
 
-		cancel_button = Gtk.Button(label="Canecl")
+		cancel_button = Gtk.Button(label="Cancel")
 		button_box.append(cancel_button)
 		cancel_button.connect("clicked", lambda btn: self.destroy())
 
@@ -152,25 +153,16 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 	def _on_clicked_add_tags(self, button: Gtk.Button, entry: Gtk.Entry, switch: Gtk.Switch | None):
 		text = str(entry.get_text())
 		tags = re.findall(r"((?:\\ |[^ ])+)", text)
-		files = []
-		for file in self._files:
-			location = file.get_location()
-			if not isinstance(location, Gio.File):
-				continue
-			path = location.get_path()
-			if path:
-				files.append(path)
-		tmsu_add_tags(files, tags, recursive=switch.get_active() if switch else False)
+		self._runner.add(NautilusTMSUCommandTag(self._files, tags, recursive=switch.get_active() if switch else False))
 		self.destroy()
 
 
 class NautilusTMSUEditTagListDialog(NautilusTMSUDialog):
-	def __init__(self, title, file_info: Nautilus.FileInfo, tmsu_callback: TMSUCallback, can_add_item: bool=False):
+	def __init__(self, title, file_info: Nautilus.FileInfo, can_add_item: bool=False):
 		super().__init__(title, [file_info, ])
 
 		self._can_add_item = can_add_item
 		self._file_info = file_info
-		self._tmsu_callback = tmsu_callback
 		self.set_default_size(400, 500)
 
 		self._create_child_box()
@@ -180,13 +172,7 @@ class NautilusTMSUEditTagListDialog(NautilusTMSUDialog):
 		raise NotImplementedError()
 
 	def delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox):
-		path = get_path_from_file_info(file_info, not file_info.is_directory())
-		if path:
-			try:
-				self._tmsu_callback(path, tag)
-				tag_listbox.remove(row)
-			except:
-				pass
+		raise NotImplementedError()
 
 	def get_existing_tags(self):
 		raise NotImplementedError()
@@ -208,7 +194,7 @@ class NautilusTMSUEditTagListDialog(NautilusTMSUDialog):
 	def on_delete_dialog_choose_finish(self, dialog: Gtk.AlertDialog, result: Gio.AsyncResult, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox):
 		response = dialog.choose_finish(result)
 		if response == 0:
-			self.delete_existing_tag(self._file_info, tag, row, tag_listbox)
+			self._internal_delete_existing_tag(self._file_info, tag, row, tag_listbox)
 
 	def _create_child_box(self):
 		vbox = self.get_child()
@@ -244,36 +230,43 @@ class NautilusTMSUEditTagListDialog(NautilusTMSUDialog):
 
 		self.set_child(vbox)
 
+	def _internal_delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox):
+		try:
+			self.delete_existing_tag(file_info, tag, row, tag_listbox)
+			tag_listbox.remove(row)
+		except:
+			pass
+
 
 class NautilusTMSUEditDialog(NautilusTMSUEditTagListDialog):
 	def __init__(self, file: Nautilus.FileInfo):
-		super().__init__("TMSU Edit Tags", file, tmsu_untag_file, True)
+		super().__init__("TMSU Edit Tags", file, True)
 
 	@property
 	def delete_dialog_detail(self):
 		return "Are you sure you want to remove the tag \"{tag}\" from the file {file}"
 
+	def delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox):
+		NautilusTMSUCommandUntag([file_info], [tag]).execute()
+
 	def get_existing_tags(self):
 		tags = []
 		for file in self._files:
-			tags += tmsu_get_tags(file_info=file)
+			tags += NautilusTMSUCommandTags(file).execute()
 		return set(tags)
 
 
 class NautilusTMSUManageDialog(NautilusTMSUEditTagListDialog):
 	def __init__(self, file: Nautilus.FileInfo):
-		super().__init__("TMSU Manage Tags", file, tmsu_delete_tag)
+		self._cwd = find_tmsu_root(file)
+		super().__init__("TMSU Manage Tags", file)
 
 	@property
 	def delete_dialog_detail(self):
-		return "Are you sure you want to remove the tag \"{tag}\" from the database at {file}?"
+		return f"Are you sure you want to remove the tag \"{{tag}}\" from the database at {self._cwd}?"
+
+	def delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox):
+		NautilusTMSUCommandDelete(file_info, [tag]).execute()
 
 	def get_existing_tags(self):
-		file_info = self._files[0]
-		result = tmsu_info(file_info)
-		if not result:
-			return []
-		matches = re.findall(r"Root path: ([^\n]+)", result, re.RegexFlag.MULTILINE)
-		if len(matches) == 0:
-			return []
-		return tmsu_get_tags(None, cwd=matches[0])
+		return NautilusTMSUCommandTags(self._files[0], True, cwd=self._cwd).execute()

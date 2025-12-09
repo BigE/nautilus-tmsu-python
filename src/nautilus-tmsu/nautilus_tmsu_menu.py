@@ -3,15 +3,16 @@ import sys
 
 try:
 	gi.require_version("Gtk", "4.0")
-	from gi.repository import Nautilus, Gio, GObject, Gtk
+	from gi.repository import Nautilus, Gio, GObject, Gtk # type: ignore
 except ValueError as e:
 	print(f"Failed to import Gtk 4.0: {str(e)}")
 	sys.exit(1)
 from typing import List, Literal
 
+from nautilus_tmsu_commands import NautilusTMSUCommandInit
 from nautilus_tmsu_dialog import NautilusTMSUAddDialog, NautilusTMSUEditDialog, NautilusTMSUManageDialog
 from nautilus_tmsu_object import NautilusTMSUObject
-from nautilus_tmsu_utils import get_path_from_file_info, is_in_tmsu_db, tmsu_init_db
+from nautilus_tmsu_runner import is_tmsu_db
 
 MENU_ITEM_NAME = "NautilusTMSUMenu"
 
@@ -37,8 +38,7 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 		if len(files) == 0:
 			return []
 
-		path = get_path_from_file_info(files[0], not files[0].is_directory())
-		if path is None or not is_in_tmsu_db(path):
+		if not is_tmsu_db(files[0]):
 			return []
 
 		menuitem = self._build_tmsu_menu("Tags", "TMSU Tags", files)
@@ -53,14 +53,11 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 	) -> List[Nautilus.MenuItem]:
 		bypass = True if current_folder == self.current_background_folder else False
 		self._current_background_folder = current_folder
-		path = get_path_from_file_info(current_folder)
 
-		if path and not bypass:
-			self._current_is_in_tmsu_db = is_in_tmsu_db(path)
+		if not bypass:
+			self._current_is_in_tmsu_db = is_tmsu_db(current_folder)
 
-		if path is None:
-			return []
-		elif not self.current_is_in_tmsu_db:
+		if not self.current_is_in_tmsu_db:
 			return [
 				self._build_tmsu_init(current_folder)
 			]
@@ -76,9 +73,7 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 		if response != 1 or not directory.is_directory():
 			return
 
-		path = get_path_from_file_info(directory)
-		if path:
-			tmsu_init_db(path)
+		NautilusTMSUCommandInit(directory).execute()
 
 	def on_menu_init_activated(self, menu_item: Nautilus.MenuItem, directory: Nautilus.FileInfo):
 		application = Gtk.Application.get_default()

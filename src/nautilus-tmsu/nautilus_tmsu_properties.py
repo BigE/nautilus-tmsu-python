@@ -1,10 +1,11 @@
 import os
 
-from gi.repository import Nautilus, Gio, GObject
+from gi.repository import Nautilus, Gio, GObject # type: ignore
 from typing import Any, List
 
+from nautilus_tmsu_commands import NautilusTMSUCommandTags
+from nautilus_tmsu_runner import is_tmsu_db
 from nautilus_tmsu_object import NautilusTMSUObject
-from nautilus_tmsu_utils import get_path_from_file_info, tmsu_get_tags, is_in_tmsu_db
 
 
 class NautilusTMSUProperties(NautilusTMSUObject, GObject.Object, Nautilus.PropertiesModelProvider):
@@ -15,13 +16,13 @@ class NautilusTMSUProperties(NautilusTMSUObject, GObject.Object, Nautilus.Proper
 		if len(files) != 1:
 			return []
 
-		path = get_path_from_file_info(files[0], not files[0].is_directory())
-		if path is None or not is_in_tmsu_db(path):
+		if not is_tmsu_db(files[0]):
 			return []
 
 		tags_model = Gio.ListStore(item_type=Nautilus.PropertiesItem)
+		tags = NautilusTMSUCommandTags(files[0]).execute()
 
-		for tag in tmsu_get_tags(files[0]):
+		for tag in tags:
 			tags_model.append(
 				Nautilus.PropertiesItem(
 					name="Tag",

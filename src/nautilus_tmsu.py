@@ -16,6 +16,13 @@ logger.addHandler(handler)
 logger.info(f"Initializing nautilus-tmsu: {__VERSION__}")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'nautilus-tmsu'))
+from nautilus_tmsu_runner import NautilusTMSURunner
+try:
+	NautilusTMSURunner()
+except LookupError as e:
+	logger.critical(e)
+	sys.exit(1)
+
 from nautilus_tmsu_column import NautilusTMSUColumn
 from nautilus_tmsu_menu import NautilusTMSUMenu
 from nautilus_tmsu_properties import NautilusTMSUProperties

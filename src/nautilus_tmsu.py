@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 
-__VERSION__ = "0.0.1"
+__VERSION__ = "0.1.0"
 
 DEBUG_VERBOSE_LEVEL = 9
 logging.addLevelName(DEBUG_VERBOSE_LEVEL, "DEBUG_VERBOSE")

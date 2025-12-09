@@ -155,6 +155,7 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		tags = re.findall(r"((?:\\ |[^ ])+)", text)
 		self._runner.add(NautilusTMSUCommandTag(self._files, tags, recursive=switch.get_active() if switch else False))
 		self.destroy()
+		[file.invalidate_extension_info() for file in self._files]
 
 
 class NautilusTMSUEditTagListDialog(NautilusTMSUDialog):
@@ -248,6 +249,7 @@ class NautilusTMSUEditDialog(NautilusTMSUEditTagListDialog):
 
 	def delete_existing_tag(self, file_info: Nautilus.FileInfo, tag: str, row: Adw.ActionRow, tag_listbox: Gtk.ListBox):
 		NautilusTMSUCommandUntag([file_info], [tag]).execute()
+		file_info.invalidate_extension_info()
 
 	def get_existing_tags(self):
 		tags = []

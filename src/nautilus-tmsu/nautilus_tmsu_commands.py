@@ -115,12 +115,14 @@ class NautilusTMSUCommandTags(NautilusTMSUCommand):
 			args.append(get_path_from_file_info(file))
 		cwd = cwd if cwd and not use_as_cwd else get_path_from_file_info(file, True)
 		super().__init__(cwd=cwd, *args)
+		self._use_as_cwd = use_as_cwd
 
 	def execute(self) -> list[str]:
 		tags = super().execute()
 		if not tags:
 			return []
-		return tags.strip().split('\n')[1:]
+		tags = tags.strip().split('\n')
+		return tags if self._use_as_cwd else tags[1:]
 
 
 class NautilusTMSUCommandUntag(NautilusTMSUCommandRecursiveMixin, NautilusTMSUCommandTagsMixin, NautilusTMSUCommandFilesMixin):

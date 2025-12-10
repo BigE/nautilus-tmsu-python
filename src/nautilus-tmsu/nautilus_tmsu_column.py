@@ -1,6 +1,4 @@
 import logging
-import queue
-import threading
 
 from gi.repository import GObject, Nautilus # type: ignore
 from urllib.parse import unquote
@@ -32,10 +30,12 @@ class NautilusTMSUColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.Info
 	def __init__(self, **kwargs) -> None:
 		super().__init__(**kwargs)
 		self._active_handlers = dict[Nautilus.OperationHandle, NautilusTMSUCommand]()
+		self._current_parent: Nautilus.FileInfo | None = None
+		self._is_parent_in_tmsu_db = False
 		self._runner = NautilusTMSURunner()
 
 	def cancel_update(self, provider: Nautilus.InfoProvider, handle: Nautilus.OperationHandle | None = None) -> None:
-		logger.debug(f"cancelling handle: {handle}")
+		logger.log(9, f"cancelling handle: {handle}")
 		with NautilusTMSURunner.lock:
 			if handle in self._active_handlers:
 				self._active_handlers[handle].can_run = False
@@ -52,10 +52,15 @@ class NautilusTMSUColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.Info
 		]
 
 	def update_file_info_full(self, provider: Nautilus.InfoProvider, handle: Nautilus.OperationHandle, closure: GObject.Closure, file: Nautilus.FileInfo):
-		logger.debug(f"update_file_info_full: {file.get_uri()}")
+		logger.log(9, f"update_file_info_full: {file.get_uri()}")
 
-		if file.get_uri_scheme() != "file" or not is_tmsu_db(file):
-			logger.debug(f"skipping non tmsu file: {file.get_uri()}")
+		if self._current_parent is None or file != self._current_parent:
+			self._current_parent = file.get_parent_info()
+			if self._current_parent:
+				self._is_parent_in_tmsu_db = is_tmsu_db(self._current_parent)
+
+		if self._current_parent and self._is_parent_in_tmsu_db is False:
+			logger.debug(f'skipping file: parent directory is not in tmsu db {file.get_uri()}')
 			return Nautilus.OperationResult.COMPLETE
 
 		command = NautilusTMSUCommandTags(file)
@@ -69,7 +74,7 @@ class NautilusTMSUColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.Info
 	def _update_ui(self, command: NautilusTMSUCommand, result: str | None, *args):
 		file: Nautilus.FileInfo
 		[provider, handle, closure, file] = args
-		logger.debug(f"_update_ui: {file.get_uri()} {result}")
+		logger.log(9, f"_update_ui: {file.get_uri()} {result}")
 
 		if handle not in self._active_handlers:
 			logger.debug(f"handler missing, skipping _update_ui")
@@ -78,6 +83,6 @@ class NautilusTMSUColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.Info
 		if result:
 			file.add_string_attribute('tmsu_tags', ', '.join([tag.replace('\\', '') for tag in result]))
 			file.invalidate_extension_info()
-		logger.debug(f"_update_ui completed")
 		Nautilus.info_provider_update_complete_invoke(closure, provider, handle, Nautilus.OperationResult.COMPLETE)
+		logger.log(9, f"_update_ui completed")
 		return False

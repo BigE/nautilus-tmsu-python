@@ -21,6 +21,9 @@ class NautilusTMSUCommand(object):
 		self._can_run = True
 		self._log_error = log_error
 
+	def __str__(self) -> str:
+		return f'{self.tmsu} {" ".join(self._args)}'
+
 	@property
 	def callback(self):
 		return self._callback
@@ -100,6 +103,18 @@ class NautilusTMSUCommandInit(NautilusTMSUCommand):
 		cwd = get_path_from_file_info(file_info, True)
 		args = ('init', )
 		super().__init__(cwd=cwd, *args)
+
+
+class NautilusTMSUCommandRepair(NautilusTMSUCommand):
+	def __init__(self, file_info: Nautilus.FileInfo, pretend: bool = False, remove_missing: bool = False, repair_database: bool = False) -> None:
+		args = ['repair', ]
+		if pretend:
+			args.append('--pretend')
+		if remove_missing:
+			args.append('--remove')
+		if repair_database is False:
+			args.append(get_path_from_file_info(file_info))
+		super().__init__(*args, cwd=get_path_from_file_info(file_info, True))
 
 
 class NautilusTMSUCommandTag(NautilusTMSUCommandRecursiveMixin, NautilusTMSUCommandTagsMixin, NautilusTMSUCommandFilesMixin):

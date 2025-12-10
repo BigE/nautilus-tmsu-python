@@ -4,15 +4,16 @@ import sys
 
 try:
 	gi.require_version("Adw", "1")
-	from gi.repository import Adw, Gio, Gtk, Nautilus # type: ignore
+	from gi.repository import Adw, Gdk, Gio, Gtk, Nautilus # type: ignore
 except ValueError as e:
 	print(f"Error loading Adw 1: {e}")
 	sys.exit(1)
 
 from typing import Callable, List, TypeAlias
 
-from nautilus_tmsu_commands import NautilusTMSUCommandDelete, NautilusTMSUCommandTag, NautilusTMSUCommandTags, NautilusTMSUCommandUntag
+from nautilus_tmsu_commands import NautilusTMSUCommandDelete, NautilusTMSUCommandRepair, NautilusTMSUCommandTag, NautilusTMSUCommandTags, NautilusTMSUCommandUntag
 from nautilus_tmsu_runner import NautilusTMSURunner, find_tmsu_root
+from nautilus_tmsu_utils import get_path_from_file_info
 
 TMSUCallback: TypeAlias = Callable[[str, str], None]
 
@@ -27,12 +28,16 @@ class NautilusTMSUDialog(Gtk.ApplicationWindow):
 		window = application.get_active_window()
 		super().__init__(application=application, modal=True, title=title, transient_for=window)
 		self._files = files
+		self._runner = NautilusTMSURunner()
 		vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, hexpand=True, vexpand=True)
 		vbox.set_margin_bottom(20)
 		vbox.set_margin_end(20)
 		vbox.set_margin_start(20)
 		vbox.set_margin_top(20)
 		self.set_child(vbox)
+		key_controller = Gtk.EventControllerKey()
+		key_controller.connect('key-pressed', self._on_key_pressed)
+		self.add_controller(key_controller)
 
 	def is_single_directory(self):
 		return self.is_single_item() and self._files[0].is_directory()
@@ -40,11 +45,16 @@ class NautilusTMSUDialog(Gtk.ApplicationWindow):
 	def is_single_item(self):
 		return len(self._files) == 1
 
+	def _on_key_pressed(self, controller: Gtk.EventControllerKey, keyval: int, keycode: int, state: int):
+		if state == Gdk.ModifierType.NO_MODIFIER_MASK and keyval == Gdk.KEY_Escape:
+			self.destroy()
+			return True
+		return False
+
 
 class NautilusTMSUAddDialog(NautilusTMSUDialog):
 	def __init__(self, files: List[Nautilus.FileInfo]):
 		super().__init__("TMSU Add Tags", files)
-		self._runner = NautilusTMSURunner()
 
 		self.set_default_size(400, 150)
 
@@ -79,10 +89,12 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 
 		save_button = Gtk.Button(label="Save")
 		button_box.append(save_button)
+		save_button.add_css_class('suggested-action')
 		save_button.connect("clicked", self._on_clicked_add_tags, entry, switch)
 
 		cancel_button = Gtk.Button(label="Cancel")
 		button_box.append(cancel_button)
+		cancel_button.add_css_class('destructive-action')
 		cancel_button.connect("clicked", lambda btn: self.destroy())
 
 		self.set_child(vbox)
@@ -272,3 +284,46 @@ class NautilusTMSUManageDialog(NautilusTMSUEditTagListDialog):
 
 	def get_existing_tags(self):
 		return NautilusTMSUCommandTags(self._files[0], True, cwd=self._cwd).execute()
+
+
+class NautilusTMSURepairDialog(NautilusTMSUDialog):
+	def __init__(self, file: Nautilus.FileInfo, repair_database: bool = False):
+		super().__init__("TMSU Repair Tags", [file, ])
+		self._repair_database = repair_database
+
+		vbox = self.get_child()
+		assert isinstance(vbox, Gtk.Box)
+
+		root_path = find_tmsu_root(file) or ""
+		label = f'You are about to repair the TMSU tag{" database at " + root_path if repair_database else "s at " + get_path_from_file_info(file)}, are you sure you want to continue?'
+		vbox.append(Gtk.Label(label=label))
+		# Remove missing files
+		remove_missing_checkbox = Gtk.CheckButton(label='Remove missing files from the database')
+		vbox.append(remove_missing_checkbox)
+		# Pretend, let the user preview changes
+		pretend_checkbox = Gtk.CheckButton(label='Do not make changes, show a preview first')
+		vbox.append(pretend_checkbox)
+
+		button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.CENTER, hexpand=True)
+		vbox.append(button_box)
+
+		continue_button = Gtk.Button(label="Continue")
+		button_box.append(continue_button)
+		continue_button.add_css_class('suggested-action')
+		continue_button.connect("clicked", self._on_clicked_repair_tags, remove_missing_checkbox, pretend_checkbox)
+
+		cancel_button = Gtk.Button(label="Cancel")
+		button_box.append(cancel_button)
+		cancel_button.add_css_class('destructive-action')
+		cancel_button.connect("clicked", lambda btn: self.destroy())
+
+		self.set_default_widget(continue_button)
+
+	def _on_clicked_repair_tags(self, button: Gtk.Button, remove_missing_checkbox: Gtk.CheckButton, pretend_checkbox: Gtk.CheckButton):
+		pretend = pretend_checkbox.get_active()
+		command = NautilusTMSUCommandRepair(self._files[0], pretend, remove_missing_checkbox.get_active(), self._repair_database)
+		self._runner.add(command, )
+		if pretend:
+			# TODO: wait for results and display them
+			pass
+		self.destroy()

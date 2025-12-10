@@ -14,6 +14,10 @@ class InfoProvider:
 	pass
 
 
+class Menu:
+	pass
+
+
 class MenuItem:
 	pass
 

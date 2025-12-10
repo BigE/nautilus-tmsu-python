@@ -41,7 +41,7 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 		if not is_tmsu_db(files[0]):
 			return []
 
-		menuitem = self._build_tmsu_menu("Tags", "TMSU Tags", files)
+		menuitem = self._build_tmsu_menu(f'{MENU_ITEM_NAME}::Tags', 'TMSU Tags', files)
 
 		return [
 			menuitem,
@@ -62,10 +62,17 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 				self._build_tmsu_init(current_folder)
 			]
 
-		menuitem = self._build_tmsu_menu("TagsBackground", "TMSU Tags", [current_folder, ])
+		name = f'{MENU_ITEM_NAME}::Background'
+		files = [current_folder, ]
+
+		tags_menuitem = self._build_tmsu_menu(f'{name}::Tags', 'TMSU Tags', files)
+		[database_menuitem, database_submenu] = self._build_submenu_item(f'{name}::Database', 'TMSU Database')
+		self._build_menu_item(f'{name}::Database::Manage', 'Manage Tags', 'manage', files, database_submenu)
+		self._build_menu_item(f'{name}::Database::Repair', 'Repair Tags', menu=database_submenu)
 
 		return [
-			menuitem,
+			tags_menuitem,
+			database_menuitem,
 		]
 
 	def on_alert_dialog_chosen(self, source: Gtk.AlertDialog, result: Gio.AsyncResult, directory: Nautilus.FileInfo):
@@ -99,11 +106,21 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 
 		dialog.present()
 
-	def _build_menu_item(self, name: str, label: str, action: Literal["add", "edit", "manage"] | None = None, files: List[Nautilus.FileInfo] = []) -> Nautilus.MenuItem:
+	def _build_menu_item(self, name: str, label: str, action: Literal["add", "edit", "manage"] | None = None, files: List[Nautilus.FileInfo] = [], menu: Nautilus.Menu | None = None) -> Nautilus.MenuItem:
 		menuitem = Nautilus.MenuItem(name=name, label=label)
 		if action and len(files):
 			menuitem.connect("activate", self.on_menu_item_activated, action, files)
+		if menu:
+			menu.append_item(menuitem)
 		return menuitem
+
+	def _build_submenu_item(self, name: str, label: str, menu: Nautilus.Menu | None = None) -> tuple[Nautilus.MenuItem, Nautilus.Menu]:
+		menuitem = self._build_menu_item(name, label)
+		submenu = Nautilus.Menu()
+		menuitem.set_submenu(submenu)
+		if menu:
+			menu.append_item(menuitem)
+		return (menuitem, submenu)
 
 	def _build_tmsu_init(self, directory: Nautilus.FileInfo):
 		if not directory.is_directory():
@@ -114,17 +131,10 @@ class NautilusTMSUMenu(NautilusTMSUObject, GObject.Object, Nautilus.MenuProvider
 		return menuitem
 
 	def _build_tmsu_menu(self, name: str, label: str, files: List[Nautilus.FileInfo] = []) -> Nautilus.MenuItem:
-		menuitem = self._build_menu_item(name, label)
-		submenu = Nautilus.Menu()
-		menuitem.set_submenu(submenu)
-
-		add_tags_menuitem = self._build_menu_item(f"{name}::Add", "Add Tags", "add", files)
-		submenu.append_item(add_tags_menuitem)
+		[menuitem, submenu] = self._build_submenu_item(name, label)
+		self._build_menu_item(f"{name}::Add", "Add Tags", "add", files, submenu)
 
 		if len(files) == 1:
-			edit_tags_menuitem = self._build_menu_item(f"{name}::Edit", "Edit Tags", "edit", files)
-			submenu.append_item(edit_tags_menuitem)
-			manage_tags_menuitem = self._build_menu_item(f"{name}::Manage", "Manage Tags", "manage", files=files)
-			submenu.append_item(manage_tags_menuitem)
+			self._build_menu_item(f"{name}::Edit", "Edit Tags", "edit", files, submenu)
 
 		return menuitem

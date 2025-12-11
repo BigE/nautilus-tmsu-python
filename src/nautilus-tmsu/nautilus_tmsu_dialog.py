@@ -13,6 +13,7 @@ from typing import Callable, List, TypeAlias
 
 from nautilus_tmsu_commands import NautilusTMSUCommandDelete, NautilusTMSUCommandRepair, NautilusTMSUCommandTag, NautilusTMSUCommandTags, NautilusTMSUCommandUntag
 from nautilus_tmsu_runner import NautilusTMSURunner, find_tmsu_root
+from nautilus_tmsu_tag_entry_box import NautilusTMSUTagEntryBox
 from nautilus_tmsu_utils import get_path_from_file_info
 
 TMSUCallback: TypeAlias = Callable[[str, str], None]
@@ -61,21 +62,11 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		vbox = self.get_child()
 		assert isinstance(vbox, Gtk.Box)
 		vbox.append(Gtk.Label(label=f"Add (space-separated) tags to {len(files)} file{'' if len(files) == 1 else 's'}"))
-		entry = Gtk.Entry(activates_default=True)
-		vbox.append(entry)
-		completion = Gtk.EntryCompletion()
-		entry.set_completion(completion)
-		completion_model = Gtk.ListStore(str)
 		switch = None
 		tags = NautilusTMSUCommandTags(files[0], True).execute()
-		for item in tags:
-			completion_model.append([item, ])
-		completion.set_model(completion_model)
-		completion.set_text_column(0)
-
-		# completion logic
-		completion.set_match_func(self._completion_match, entry)
-		completion.connect("match-selected", self.on_match_selected, entry)
+		entry_box = NautilusTMSUTagEntryBox(tags=tags)
+		entry_box.entry.set_activates_default(True)
+		vbox.append(entry_box)
 
 		if self.is_single_directory():
 			switch_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, hexpand=True)
@@ -90,7 +81,7 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		save_button = Gtk.Button(label="Save")
 		button_box.append(save_button)
 		save_button.add_css_class('suggested-action')
-		save_button.connect("clicked", self._on_clicked_add_tags, entry, switch)
+		save_button.connect("clicked", self._on_clicked_add_tags, entry_box, switch)
 
 		cancel_button = Gtk.Button(label="Cancel")
 		button_box.append(cancel_button)
@@ -100,70 +91,8 @@ class NautilusTMSUAddDialog(NautilusTMSUDialog):
 		self.set_child(vbox)
 		self.set_default_widget(save_button)
 
-	def get_current_word_info(self, entry: Gtk.Entry):
-		"""
-		Helper to find the word under the cursor.
-		Returns: (word_text, start_index, end_index)
-		"""
-		text = entry.get_text()
-		cursor_pos = entry.get_position()
-
-		# Find the start of the word (move left until space or start)
-		start = cursor_pos
-		while start > 0 and text[start - 1] != ' ':
-			start -= 1
-
-		# Find the end of the word (move right until space or end)
-		end = cursor_pos
-		while end < len(text) and text[end] != ' ':
-			end += 1
-
-		return text[start:end], start, end
-
-	def on_match_selected(self, completion, model, iter, entry: Gtk.Entry):
-		"""
-		Custom insertion: Replaces only the current word, not the whole line.
-		"""
-		selected_word = model[iter][0]
-		current_word, start, end = self.get_current_word_info(entry)
-
-		# Get the current full text
-		full_text = entry.get_text()
-
-		# Construct the new text:
-		# (Text before word) + (Selected completion) + (Text after word)
-		new_text = full_text[:start] + selected_word + full_text[end:]
-
-		entry.set_text(new_text)
-
-		# Move cursor to the end of the inserted word
-		entry.set_position(start + len(selected_word))
-
-		# Return True to stop the default handler (which would replace the whole line)
-		return True
-
-	def _completion_match(self, completion, key, iter, entry: Gtk.Entry):
-		"""
-		Custom matcher: checks if the model row matches the current word fragment.
-		"""
-		# Get the word currently being typed
-		current_word, _, _ = self.get_current_word_info(entry)
-
-		# If the word is empty, don't show completion
-		if not current_word:
-			return False
-
-		# Get the potential match from the model
-		model = completion.get_model()
-		if not model:
-			return False
-		row_value = model[iter][0]
-
-		# Check if the model value starts with our partial word (case insensitive)
-		return row_value.lower().startswith(current_word.lower())
-
-	def _on_clicked_add_tags(self, button: Gtk.Button, entry: Gtk.Entry, switch: Gtk.Switch | None):
-		text = str(entry.get_text())
+	def _on_clicked_add_tags(self, button: Gtk.Button, entry_box: NautilusTMSUTagEntryBox, switch: Gtk.Switch | None):
+		text = str(entry_box.entry.get_text())
 		tags = re.findall(r"((?:\\ |[^ ])+)", text)
 		self._runner.add(NautilusTMSUCommandTag(self._files, tags, recursive=switch.get_active() if switch else False))
 		self.destroy()

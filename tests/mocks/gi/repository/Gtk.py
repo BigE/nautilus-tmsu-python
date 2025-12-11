@@ -6,6 +6,10 @@ class ApplicationWindow:
 	pass
 
 
+class Box:
+	pass
+
+
 class Button:
 	pass
 
@@ -22,6 +26,10 @@ class EventControllerKey:
 
 
 class ListBox:
+	pass
+
+
+class ListView:
 	pass
 
 
